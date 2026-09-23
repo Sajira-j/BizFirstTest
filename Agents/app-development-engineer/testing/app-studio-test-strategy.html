@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App Studio Test Strategy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF7F2; --surface: #FFFFFF; --surface-2: #F1ECE2; --border: #E3DACB;
+    --text: #2B2620; --text-muted: #6B6152; --accent: #2D6E5E; --accent-soft: #DCECE6;
+    --ok: #1C7C4C; --ok-soft: #DFF3E7; --warn: #9A3B12; --warn-soft: #FCE6DC;
+    --code-bg: #2B2620; --code-text: #F1ECE2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17201D; --surface: #1E2A25; --surface-2: #26342E; --border: #38493F;
+      --text: #EDF3EF; --text-muted: #A9BDB4; --accent: #63C9AE; --accent-soft: #1C332B;
+      --ok: #6FD79E; --ok-soft: #17301F; --warn: #F0B15E; --warn-soft: #33230F;
+      --code-bg: #0E1512; --code-text: #EDF3EF;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17201D; --surface: #1E2A25; --surface-2: #26342E; --border: #38493F;
+    --text: #EDF3EF; --text-muted: #A9BDB4; --accent: #63C9AE; --accent-soft: #1C332B;
+    --ok: #6FD79E; --ok-soft: #17301F; --warn: #F0B15E; --warn-soft: #33230F;
+    --code-bg: #0E1512; --code-text: #EDF3EF;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"IBM Plex Sans",sans-serif; line-height:1.6; }
+  .wrap { max-width: 980px; margin:0 auto; padding: 3rem 1.75rem 6rem; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:.78rem; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.6rem; }
+  h1 { font-size: clamp(1.9rem,3.6vw,2.6rem); margin:0 0 .6rem; letter-spacing:-.01em; }
+  .lede { color:var(--text-muted); max-width:68ch; font-size:1.05rem; margin:0 0 2rem; }
+  h2 { font-size:1.4rem; margin:2.8rem 0 1rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  h3 { font-size:1.08rem; margin:1.8rem 0 .6rem; }
+  p { color: var(--text); }
+  table { width:100%; border-collapse:collapse; font-size:.86rem; margin:1rem 0 1.6rem; overflow-x:auto; display:block; }
+  th,td { text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th { font-family:"IBM Plex Mono",monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); }
+  code, .mono { font-family:"IBM Plex Mono",monospace; font-size:.85em; }
+  code { background:var(--surface-2); padding:.1em .4em; border-radius:4px; }
+  pre { background:var(--code-bg); color:var(--code-text); padding:1rem 1.2rem; border-radius:10px; overflow-x:auto; font-family:"IBM Plex Mono",monospace; font-size:.82rem; line-height:1.55; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.2rem 1.4rem; margin-bottom:1rem; }
+  .badge { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:.68rem; text-transform:uppercase; letter-spacing:.04em; padding:.18rem .55rem; border-radius:999px; margin-right:.4rem; }
+  .badge.ok { background:var(--ok-soft); color:var(--ok); }
+  .badge.warn { background:var(--warn-soft); color:var(--warn); }
+  .badge.accent { background:var(--accent-soft); color:var(--accent); }
+  ol, ul { padding-left:1.3rem; }
+  li { margin-bottom:.4rem; }
+  .callout { background:var(--warn-soft); border:1px solid var(--warn); border-radius:10px; padding:1rem 1.3rem; margin:1.2rem 0; font-size:.92rem; }
+  .callout b { color: var(--warn); }
+  .callout.info { background:var(--accent-soft); border-color:var(--accent); }
+  .callout.info b { color:var(--accent); }
+  footer { margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); color:var(--text-muted); font-size:.82rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">BizFirstGO · App Studio</div>
+  <h1>App Studio Test Strategy</h1>
+  <p class="lede">How to test the designer, rendering engine, routing, responsive/PWA behavior, and the embeddable player using the two real demo apps seeded into the local dev DB — <b>Customer Portal Demo</b> (AppID 1050) and <b>Admin Console Demo</b> (AppID 1051).</p>
+
+  <div class="callout info">
+    <b>Build status.</b> Backend, rendering engine, routing, responsive/PWA, designer UI, and the embeddable player are all built and code-verified (typecheck clean, live API routes confirmed reachable). This document is the first real <i>test</i> pass against that build — most scenarios below have not yet been run in a live browser.
+  </div>
+
+  <h2>Test app scope</h2>
+  <p>All fixture data below lives in <code>AIExt_Apps</code> / <code>AIExt_AppWidgets</code> (TenantID = 1), inserted by two idempotent, direct-table insert scripts under <code>BizFirstFiDB\BizFirstFiV3DB\BizFirstFiV3DB\dbo\Data\AppStudio\</code> — safe to re-run, guarded on <code>AppCode</code> uniqueness.</p>
+
+  <table>
+    <tr><th>AppID</th><th>Name</th><th>AppCode</th><th>Layout</th><th>Sections</th><th>Pattern under test</th></tr>
+    <tr><td class="mono">1050</td><td>Customer Portal Demo</td><td class="mono">customer-portal-demo</td><td class="mono">top-nav</td><td>header, content, footer</td><td>Marketing-site: nav + in-place content swap</td></tr>
+    <tr><td class="mono">1051</td><td>Admin Console Demo</td><td class="mono">admin-console-demo</td><td class="mono">top-nav-sidebar</td><td>header, left-menu, content, footer</td><td>Admin-app: left-menu-driven search + CRUD</td></tr>
+  </table>
+
+  <h3>Bound widgets</h3>
+  <table>
+    <tr><th>AppID</th><th>Section</th><th>WidgetID</th><th>Widget</th><th>Notes</th></tr>
+    <tr><td class="mono">1050</td><td>header</td><td class="mono">2</td><td>top-bar-widget</td><td>content widget, static template</td></tr>
+    <tr><td class="mono">1050</td><td>content</td><td class="mono">3</td><td>welcome-dashboard-widget</td><td>content widget, static template</td></tr>
+    <tr><td class="mono">1050</td><td>footer</td><td>—</td><td><i>unbound</i></td><td>deliberate — exercises the designer's empty-section state</td></tr>
+    <tr><td class="mono">1051</td><td>header</td><td class="mono">2</td><td>top-bar-widget</td><td>content widget, static template</td></tr>
+    <tr><td class="mono">1051</td><td>left-menu</td><td class="mono">1</td><td>sidebar-navigation-widget</td><td><code>ShowInNav=1</code>, <code>NavPosition=side</code>, <code>Routable=1</code></td></tr>
+    <tr><td class="mono">1051</td><td>content</td><td class="mono">4</td><td>quick-stats-widget</td><td>content widget, admin-only per its own <code>access.roles</code></td></tr>
+  </table>
+  <p style="font-size:.85rem;color:var(--text-muted)">Search/CRUD FormWidget content is deliberately <b>not</b> pre-seeded on either app — Scenarios 9–10 below exercise adding it live through the designer, not starting from a pre-built state.</p>
+
+  <div class="callout">
+    <b>Blocking known defect — read before running any authenticated scenario.</b> <code>POST /api/v1/iam/auth/login</code> hangs indefinitely for two specific known real accounts (confirmed via direct <code>curl</code>, reproducible, independent of the browser — a nonexistent email returns a clean 401 quickly by contrast). This is a real backend defect outside App Studio's own scope. If login hangs during Scenario 1, this is very likely why — try a different known-good account before assuming a new App Studio bug, and flag the defect itself separately rather than re-diagnosing it here.
+  </div>
+
+  <h2>Test scenarios — Designer</h2>
+
+  <h3>1 — Login + app list</h3>
+  <p>Log into <code>app-studio-designer</code>, confirm both <b>Customer Portal Demo</b> and <b>Admin Console Demo</b> appear in the app list scoped to TenantID 1. If login hangs, see the blocking-defect callout above before treating it as new.</p>
+
+  <h3>2 — Open AppID 1050, confirm layout renders</h3>
+  <p>Open Customer Portal Demo. Confirm the section tree shows header/content/footer, the header section shows <b>top-bar-widget</b> bound, content shows <b>welcome-dashboard-widget</b> bound, and footer shows as empty — not broken/erroring.</p>
+
+  <h3>3 — Open AppID 1051, confirm admin layout + nav flags</h3>
+  <p>Open Admin Console Demo. Confirm <code>top-nav-sidebar</code> renders header + left sidebar + content + footer, and that the left-menu binding (sidebar-navigation-widget) shows as routable / in-nav in the widget properties panel — this is the field the router (Scenario 8) depends on.</p>
+
+  <h3>4 — Live-preview canvas (WYSIWYG)</h3>
+  <p>With either app open, confirm the canvas is a real mounted <code>AppPlayer</code> (<code>studioMode=true</code>) — not a placeholder list of section names. Click a section/widget in the canvas and confirm it selects the matching entry in the properties panel (event-delegation click-to-select).</p>
+
+  <h3>5 — Widget add / remove / reorder</h3>
+  <p>On AppID 1050's empty footer section, add a widget via the designer's add-widget flow. Then reorder header vs. content via drag-and-drop, and again via the Alt+Up/Down keyboard fallback — confirm both mechanisms produce the same result and persist on save.</p>
+
+  <h3>6 — Section delete</h3>
+  <p>Delete a non-critical section (e.g. the footer you just added a widget to in Scenario 5) and confirm it's removed from both the tree and the live-preview canvas after save.</p>
+
+  <h3>7 — Publish + version snapshot</h3>
+  <p>Publish AppID 1050. Confirm the real confirmation modal appears (not a bare <code>window.confirm</code>/<code>alert</code>), and that publishing creates a new row visible in the Version Panel. Restore an earlier version and confirm the layout reverts.</p>
+
+  <h3>8 — Routing / deep links</h3>
+  <p>On AppID 1051 (has a routable left-menu widget), navigate between two sections and confirm the URL updates to reflect the current section. Reload the page at that URL and confirm the same section is restored (not reset to the default). Use browser Back/Forward and confirm it moves between the visited sections rather than leaving the app.</p>
+
+  <h3>9 — FormWidget: create flow</h3>
+  <p>Bind FormID <code>20800</code> ("Shared: Customer Contact Details" — a real seeded demo form, not production data) to AppID 1050's footer section in <code>create</code> mode. Confirm the form renders via <code>FormRenderer</code> and a real submit creates a record.</p>
+
+  <h3>10 — Reactive search + CRUD (admin pattern)</h3>
+  <p>On AppID 1051's content section, add a filter FormWidget (edit-mode form acting as a filter bar) plus a list/table widget, wired via <code>setVar</code>/<code>filterVarKey</code>. Confirm typing in the filter reactively narrows the list — this path is confirmed wired end-to-end in code; this scenario is its first live check.</p>
+
+  <h3>11 — Known gap: FormWidget edit-mode hydration</h3>
+  <p><b>Expected to fail as documented, not a new bug to file.</b> Click a row in the list widget from Scenario 10 to open it in <code>edit</code> mode. <code>FormWidgetHandler.resolveInitialData</code> currently only resolves static tokens, not a fetch-by-record-ID — expect the edit form to open empty rather than pre-filled. Confirms the known gap is still present; only escalate if behavior differs from this.</p>
+
+  <h3>12 — Known gap: seeded nav widgets don't resolve tokens</h3>
+  <p><b>Expected to fail as documented, not a new bug to file.</b> Click a link inside the seeded <code>top-bar-widget</code>/<code>sidebar-navigation-widget</code> content (which contain unresolved <code>{{ nav.items }}</code>/<code>{{ topBar.actions }}</code> tokens). Confirm nothing swaps/navigates — <code>TokenResolverService</code> has no <code>nav</code>/<code>topBar</code> scope and content widgets have no click-to-action wiring. Real navigation (Scenario 8) only works through a <code>Routable</code> FormWidget/menu, not these two static seeded widgets.</p>
+
+  <h2>Test scenarios — Rendering, responsive, PWA, player</h2>
+
+  <h3>13 — Content widget sanitization</h3>
+  <p>Confirm <b>welcome-dashboard-widget</b> / <b>quick-stats-widget</b> render their HTML via DOMPurify (view page source / inspect — no raw <code>&lt;script&gt;</code> execution possible even if injected into the widget's template for this test).</p>
+
+  <h3>14 — Responsive breakpoints</h3>
+  <p>Toggle the designer's breakpoint-preview control through desktop / tablet / mobile on AppID 1051 (has the most sections). Confirm section style overrides apply and any section flagged hidden-at-breakpoint actually disappears in that preview, with <code>data-breakpoint</code> reflecting the current value in the DOM.</p>
+
+  <h3>15 — PWA app-shell install + offline shell</h3>
+  <p>Via <code>app-player</code> (not the login-gated designer), load either app by AppID, confirm the manifest/service-worker register (installable PWA prompt or DevTools Application tab shows a registered SW), then go offline and reload — confirm the app shell still loads (static assets only; live data calls are expected to fail offline, that's in-scope, not a bug).</p>
+
+  <h3>16 — Embeddable player, third-party host</h3>
+  <p>Confirm <code>@app-studio/player</code>'s <code>&lt;AppPlayer appID=1050 .../&gt;</code> renders correctly when mounted inside <code>app-template</code>'s <code>WelcomePage.tsx</code> (the actual Phase 6 integration point) using that host app's own auth session — proves the package works by <code>AppID</code> alone in a genuinely different app, not just inside <code>app-player</code>/the designer.</p>
+
+  <h3>17 — Tenant isolation</h3>
+  <p>Confirm AppID 1050/1051 are <b>not</b> visible/loadable under any TenantID other than 1 (attempt via a second tenant's session/token if available). Code review already confirmed this routes through <code>BaseRepository.ApplyTenantFilter()</code> implicitly — this scenario is the live confirmation of that.</p>
+
+  <h2>Resetting / re-seeding</h2>
+  <p>Both insert scripts are idempotent — safe to re-run without duplicating rows:</p>
+  <pre>sqlcmd -S ".\SQLEXPRESS" -d "data-ocean-platform-prod" -E -C -i "dbo\Data\AppStudio\AIExt_Apps_customer-portal-demo.data.sql"
+sqlcmd -S ".\SQLEXPRESS" -d "data-ocean-platform-prod" -E -C -i "dbo\Data\AppStudio\AIExt_Apps_admin-console-demo.data.sql"</pre>
+  <p>To fully reset: delete matching rows in <code>AIExt_AppWidgets</code> where <code>AppID IN (1050,1051)</code>, then <code>AIExt_Apps</code> where <code>AppCode IN ('customer-portal-demo','admin-console-demo')</code>, then re-run the scripts above.</p>
+
+  <h2>Recording results</h2>
+  <p>Run scenarios through <code>Documentation\Employees\agentic-testing\app-studio-designer\</code> (currently a placeholder — <code>feature-list.md</code>/<code>test-plan.md</code> still need to be written from the scenarios above) so results land as a real <code>testround\r1\results.md</code> with screenshots, matching every other app tested under that system.</p>
+
+  <footer>Generated 2026-08-25. Fixture data lives in <code class="mono">dbo\Data\AppStudio\AIExt_Apps_customer-portal-demo.data.sql</code> / <code class="mono">AIExt_Apps_admin-console-demo.data.sql</code> (BizFirstFiDB repo). Build plan/status: <code class="mono">Documentation\Employees\agentic-coding\app-studio\</code>.</footer>
+</div>
+</body>
+</html>

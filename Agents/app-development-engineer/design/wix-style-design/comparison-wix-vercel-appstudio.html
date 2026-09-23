@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wix vs Vercel vs App Studio — Comparison</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f7f6f2;
+    --paper-2:#eeece4;
+    --ink:#1c2430;
+    --ink-soft:#4a5568;
+    --line:#c9c4b6;
+    --blue:#1f5f7a;
+    --blue-soft:#e3edf0;
+    --green:#2f7a52;
+    --amber:#a9772c;
+    --red:#a83b3b;
+    --studio:#f0f6f2;
+    --studio-line:#2f7a52;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#14181d;
+      --paper-2:#1b2027;
+      --ink:#e8e6df;
+      --ink-soft:#a3a99f;
+      --line:#3a4048;
+      --blue:#6fb3cf;
+      --blue-soft:#1c2b31;
+      --green:#7fc79a;
+      --amber:#d9a355;
+      --red:#e08787;
+      --studio:#16211b;
+      --studio-line:#7fc79a;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.5;
+    padding:48px 24px 96px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  header{margin-bottom:40px;position:relative;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--blue);
+    display:flex;align-items:center;gap:10px;
+    margin-bottom:14px;
+  }
+  .eyebrow::before{content:'';width:22px;height:1px;background:var(--blue);display:inline-block;}
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:clamp(32px,4.4vw,50px);
+    letter-spacing:-0.015em;
+    margin:0 0 14px;
+    max-width:16ch;
+  }
+  .sub{
+    font-size:16px;
+    color:var(--ink-soft);
+    max-width:62ch;
+    margin:0;
+  }
+  .datestamp{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:18px;
+  }
+
+  /* blueprint corner brackets on the table frame */
+  .frame{
+    position:relative;
+    border:1px solid var(--line);
+    padding:2px;
+    margin-top:36px;
+  }
+  .frame::before,.frame::after,
+  .frame .bl,.frame .br{
+    content:'';position:absolute;width:14px;height:14px;
+    border-color:var(--blue);border-style:solid;border-width:0;
+  }
+  .frame::before{top:-1px;left:-1px;border-top-width:2px;border-left-width:2px;}
+  .frame::after{top:-1px;right:-1px;border-top-width:2px;border-right-width:2px;}
+  .frame .bl{bottom:-1px;left:-1px;border-bottom-width:2px;border-left-width:2px;}
+  .frame .br{bottom:-1px;right:-1px;border-bottom-width:2px;border-right-width:2px;}
+
+  .table-scroll{overflow-x:auto;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--paper);
+    min-width:760px;
+  }
+  thead th{
+    text-align:left;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    padding:18px 20px;
+    border-bottom:1px solid var(--line);
+    background:var(--paper-2);
+  }
+  thead th:first-child{width:22%;}
+  thead th .price{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:400;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:4px;
+    letter-spacing:0.02em;
+  }
+  th.studio-col, td.studio-col{
+    background:var(--studio);
+    border-left:2px solid var(--studio-line);
+    border-right:2px solid var(--studio-line);
+  }
+  tbody tr td{
+    padding:16px 20px;
+    border-bottom:1px solid var(--line);
+    font-size:14.5px;
+    vertical-align:top;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr td:first-child{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+    letter-spacing:0.01em;
+    color:var(--ink-soft);
+    padding-top:18px;
+  }
+  .mark{font-size:16px;}
+  .yes{color:var(--green);}
+  .no{color:var(--red);}
+  .warn{color:var(--amber);}
+  .note{
+    display:block;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:3px;
+    line-height:1.4;
+  }
+  .tag{
+    display:inline-block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    padding:2px 7px;
+    border-radius:3px;
+    margin-top:6px;
+  }
+  .tag.shipped{background:var(--blue-soft);color:var(--blue);}
+  .tag.unconfirmed{background:var(--paper-2);color:var(--amber);border:1px solid var(--amber);}
+  .tag.na{background:var(--paper-2);color:var(--ink-soft);}
+
+  footer{
+    margin-top:40px;
+    padding-top:20px;
+    border-top:1px solid var(--line);
+    font-size:13px;
+    color:var(--ink-soft);
+    display:flex;
+    flex-wrap:wrap;
+    gap:24px;
+  }
+  footer .legend{display:flex;align-items:center;gap:8px;}
+  footer .swatch{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Internal comparison — 2026-08-30</div>
+    <h1>Where App Studio actually stands</h1>
+    <p class="sub">A verified, honest read against Wix and Vercel Hobby — not a pitch. Every App Studio cell reflects only what was confirmed built and live-tested this session; anything less certain is marked <span class="tag unconfirmed" style="margin:0 2px;">unconfirmed</span> rather than assumed.</p>
+    <div class="datestamp">Compiled from the wix-style-design implementation session · BizFirstGO / App Studio</div>
+  </header>
+
+  <div class="frame">
+    <span class="bl"></span><span class="br"></span>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Wix<span class="price">$17 / mo</span></th>
+            <th>Vercel Hobby<span class="price">$0</span></th>
+            <th class="studio-col">App Studio<span class="price">BizFirstGO internal</span></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr>
+            <td>Hosting</td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td class="studio-col">Self-hosted<span class="note">Deployed on BizFirst infrastructure, not a public managed hosting tier.</span></td>
+          </tr>
+
+          <tr>
+            <td>HTTPS / CDN</td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td class="studio-col">Handled by BizFirst infra<span class="note">Not a product-level feature — inherited from internal deployment, not verified this session.</span><span class="tag unconfirmed">Unconfirmed</span></td>
+          </tr>
+
+          <tr>
+            <td>Custom domain</td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td><span class="mark warn">&#9888;</span> You need your domain</td>
+            <td class="studio-col">Not applicable<span class="note">Internal platform, not a SaaS product with per-customer domains.</span><span class="tag na">N/A</span></td>
+          </tr>
+
+          <tr>
+            <td>Drag-and-drop builder</td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td><span class="mark no">&#10007;</span></td>
+            <td class="studio-col"><span class="mark no">&#10007;</span> Not yet<span class="note">Free-form positioning (Task 3) is designed — additive "canvas mode" per section, ~20&ndash;27 dev-days estimated — but not started. Today's Designer has click-to-edit inline editing and section/widget management, not free drag placement.</span></td>
+          </tr>
+
+          <tr>
+            <td>Templates</td>
+            <td><span class="mark yes">&#10003;</span> 2,000+</td>
+            <td><span class="mark no">&#10007;</span></td>
+            <td class="studio-col">Emerging<span class="note">"Clone App" capability exists; one real template (Qoboto, a decentralized-website-builder clone) was purpose-built this session as the first proof case. Not a library yet.</span></td>
+          </tr>
+
+          <tr>
+            <td>Non-technical user</td>
+            <td><span class="mark">&#9733;&#9733;&#9733;&#9733;&#9733;</span></td>
+            <td><span class="mark">&#9733;</span></td>
+            <td class="studio-col"><span class="mark">&#9733;&#9733;&#9733;</span><span class="note">Meaningfully improved this session: unified WYSIWYG canvas, click-anywhere inline editing, no more mode-switching between Pages/Layout/Config. Still rough — a real permanent-loading regression was found and fixed today but not yet fully re-verified with live data.</span></td>
+          </tr>
+
+          <tr>
+            <td>Git / deployment</td>
+            <td>Not the focus</td>
+            <td><span class="mark">&#9733;&#9733;&#9733;&#9733;&#9733;</span></td>
+            <td class="studio-col">One-click Publish exists<span class="note">A real Publish action (<code>AppsApiClient.publish</code>) ships changes from the Designer. The deployment pipeline/target behind it wasn't inspected this session.</span><span class="tag unconfirmed">Partially confirmed</span></td>
+          </tr>
+
+          <tr>
+            <td>SEO tools</td>
+            <td>Built-in</td>
+            <td>You build it</td>
+            <td class="studio-col"><span class="mark yes">&#10003;</span> Built-in<span class="note">Shipped this session: a 10-check SEO checklist (title/description length, heading order, alt-text coverage, canonical URL, etc.) plus per-page meta tags, computed from real page content — not mocked.</span><span class="tag shipped">Shipped 2026-08-30</span></td>
+          </tr>
+
+          <tr>
+            <td>Forms</td>
+            <td>Built-in</td>
+            <td>Build / integrate</td>
+            <td class="studio-col"><span class="mark yes">&#10003;</span> Built-in<span class="note">Real embeddable forms via Atlas Forms integration (FormWidgetHandler renders live Atlas Forms inside a page) — pre-existing capability, reused, not built this session.</span></td>
+          </tr>
+
+          <tr>
+            <td>Blog</td>
+            <td>Built-in</td>
+            <td>Build / integrate</td>
+            <td class="studio-col"><span class="mark no">&#10007;</span> Not built</td>
+          </tr>
+
+          <tr>
+            <td>Booking</td>
+            <td>Built-in</td>
+            <td>Build / integrate</td>
+            <td class="studio-col"><span class="mark no">&#10007;</span> Not built</td>
+          </tr>
+
+          <tr>
+            <td>Ecommerce</td>
+            <td>Available on higher plans</td>
+            <td>Build / integrate</td>
+            <td class="studio-col"><span class="mark no">&#10007;</span> Not built</td>
+          </tr>
+
+          <tr>
+            <td>Business tools</td>
+            <td>Marketing, forms, etc.</td>
+            <td>Mostly infrastructure</td>
+            <td class="studio-col">Different category<span class="note">App Studio sits inside a broader AI/workflow platform — AI-agent widgets, workflow-template widgets, HIL inbox — real differentiators Wix and Vercel don't have, but they're workflow/AI tooling, not marketing/CRM tooling.</span></td>
+          </tr>
+
+          <tr>
+            <td>Customer support</td>
+            <td>24/7</td>
+            <td>Limited on Hobby</td>
+            <td class="studio-col">Not applicable<span class="note">Internal tool — supported by the internal dev team, not a vendor support line.</span><span class="tag na">N/A</span></td>
+          </tr>
+
+          <tr>
+            <td>Maintenance</td>
+            <td>Wix handles it</td>
+            <td>Developer handles application</td>
+            <td class="studio-col">Internal dev team<span class="note">No SaaS vendor in the loop — the same team building App Studio also operates it.</span></td>
+          </tr>
+
+          <tr>
+            <td>Commercial use</td>
+            <td><span class="mark yes">&#10003;</span></td>
+            <td><span class="mark no">&#10007;</span> Hobby is for personal/non-commercial use</td>
+            <td class="studio-col">Not applicable<span class="note">Internal/BizFirst use only — not a licensing tier that applies here.</span><span class="tag na">N/A</span></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    <div class="legend"><span class="swatch" style="background:var(--blue);"></span>Shipped &amp; verified this session</div>
+    <div class="legend"><span class="swatch" style="background:var(--amber);"></span>Unconfirmed — needs product-team input</div>
+    <div class="legend"><span class="swatch" style="background:var(--ink-soft);"></span>Not applicable to an internal platform</div>
+  </footer>
+
+</div>
+</body>
+</html>

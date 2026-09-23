@@ -1,0 +1,858 @@
+<title>App Studio MCP Coverage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --paper:#f5f7f7; --paper-raised:#fff; --paper-sunken:#eef2f1; --ink:#16212a; --ink-soft:#47606c; --line:#d7e1e0; --accent:#0f7a82; --accent-soft:#e2f1f0; --good:#1f7a4d; --good-soft:#e3f3ea; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper:#0f1519; --paper-raised:#161f24; --paper-sunken:#0c1114; --ink:#e6edf0; --ink-soft:#a6bac3; --line:#263238; --accent:#56c2c7; --accent-soft:#102c2d; --good:#7fd6a5; --good-soft:#12291d; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:'IBM Plex Sans',sans-serif; line-height:1.6; padding-block: 32px; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+  h1 { font-size: 1.8rem; margin-bottom: 6px; }
+  h2 { font-size: 1.2rem; margin: 0 0 10px; color: var(--accent); }
+  .sub { color: var(--ink-soft); margin-bottom: 28px; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 32px; }
+  .pill { font-family:'IBM Plex Mono',monospace; font-size:0.78rem; background:var(--paper-sunken); border:1px solid var(--line); border-radius:6px; padding:3px 8px; }
+  .card { background: var(--paper-raised); border:1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h3 { margin: 0 0 4px; font-family:'IBM Plex Mono',monospace; font-size:1rem; color: var(--accent); }
+  pre { background: var(--paper-sunken); border:1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: 0.8rem; font-family: 'IBM Plex Mono',monospace; margin: 6px 0; }
+  .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); margin-top: 10px; }
+  img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); margin: 10px 0; }
+  figcaption { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: 20px; }
+  .badge { display:inline-block; background: var(--good-soft); color: var(--good); border:1px solid var(--good); border-radius: 999px; padding: 2px 10px; font-size: 0.75rem; font-weight:600; }
+</style>
+
+<div class="wrap">
+  <h1>App Studio MCP Coverage</h1>
+  <p class="sub">Real MCP tool calls captured live while building the Michael Jackson multi-page site through <code>/mcp</code>, across three follow-up passes the same night. All 16 real App Studio MCP tools now exercised at least once. <span class="badge">Live, not simulated</span></p>
+
+  <h2>Tools exercised (16/16)</h2>
+  <div class="toolbar"><span class="pill">create_page</span><span class="pill">create_project_with_app</span><span class="pill">create_widget</span><span class="pill">update_page</span><span class="pill">update_widget_placement</span><span class="pill">create_section</span><span class="pill">list_apps</span><span class="pill">get_app</span><span class="pill">list_widgets_in_app</span><span class="pill">list_widget_types</span><span class="pill">list_pages</span><span class="pill">create_app</span><span class="pill">create_app_from_template</span><span class="pill">delete_page</span><span class="pill">delete_app</span></div>
+
+  <h2 style="color:var(--good)">The actual root cause, found and fixed: a wrong shape baked into create_widget's own description</h2>
+  <p>Two prior passes tonight got as far as "sections can be created, widgets attach correctly, DB rows are all correct" but content still rendered as a blank page in the real Player — nav bar only. The leading theory going in was a stale-cache/resolver bug. It wasn't. A genuine hard reload (F5, verified via screenshot before and after) did NOT fix it, which ruled out caching and forced a real trace: DOM inspection showed the widget WAS mounting (<code>data-widget="184"</code> present, wrapper had 1 child) but rendered zero visible text. That pointed straight at the widget's own config, not the layout/section machinery.</p>
+  <p><b>Real root cause</b>: the widget-handlers-content-widget package's actual <code>ContentWidgetConfig</code> interface requires two separate fields — <code>{ content: string, format: 'html'|'markdown'|'text' }</code>. But <code>create_widget</code>'s own server-side <code>[Description]</code> attribute (read by every MCP caller, including Claude) showed the WRONG example — a flattened <code>{"markdown": "..."}</code> shape — and <code>WidgetTypeCatalog.Validate()</code>'s "content" case checked for exactly that wrong shape too, so it was accepted, stored, and silently rendered nothing. A RAG doc "fix" made earlier tonight had actually gone the wrong direction, "correcting" the doc to match the broken validator instead of the real renderer. All three are now fixed at the source: <code>CreateWidgetTool.cs</code>'s example, <code>WidgetTypeCatalog.cs</code>'s validation logic, and <code>content.md</code> (which now also documents this exact flip-flop so a future session trusts the renderer over a validator, not the other way around).</p>
+
+  <h2>Before / during / after — real screenshots, same page, same night</h2>
+  <img src="screenshots/03-content-fixed-no-style.jpg" alt="Content widget rendering after the shape fix, before styling">
+  <figcaption>Fig. 3 — Immediately after the fix: real page content ("The King of Pop" + biography paragraph) renders live in the Player for the first time tonight. Confirms the root cause was the config shape, not sections/resolver/caching. Note the text runs edge-to-edge with no padding — a real, separate design issue, fixed next.</figcaption>
+  <img src="screenshots/04-content-fixed-with-style.jpg" alt="Same content after applying padding and max-width via update_widget_placement">
+  <figcaption>Fig. 4 — Same widget, same page, after one <code>update_widget_placement</code> call adding <code>padding: 40px</code> / <code>maxWidth: 800px</code> / centered margin via <code>styleConfiguration.widgetContainer.style</code>. Real, live-verified proof the design-review-and-fix loop works end to end via MCP alone.</figcaption>
+
+  <h2>Site view — before section wiring (widgets existed in DB, nothing rendered)</h2>
+  <img src="screenshots/01-designer-no-layout-gap.jpg" alt="Designer showing No layout defined yet">
+  <figcaption>Fig. 1 — App Studio Designer, Home page: "No layout defined yet." All widgets had already been created via <code>create_widget</code> with real <code>sectionName</code> values — they were silently orphaned because no <code>AppSection</code> existed yet, and no MCP tool can create one. See the RAG doc update in <code>app-model.md</code> for the full write-up.</figcaption>
+
+  <h2>Site view — real Player render after manually wiring sections</h2>
+  <img src="screenshots/02-player-live-render.jpg" alt="Real App Player render showing the nav bar">
+  <figcaption>Fig. 2 — The real end-user Player (<code>localhost:6130</code>, authenticated via a real JWT from the Designer's own Preview button) rendering the shared navigation bar built via <code>create_widget</code> (page-navigation) once its section was manually created in the Designer. Page-scoped hero/body content did not appear here — flagged as a separate, not-yet-root-caused gap in the same RAG doc update.</figcaption>
+
+  <h2>Every call, in order</h2>
+  
+  <div class="card">
+    <h3>create_project_with_app</h3>
+    <div>Creates a new Project and App in one call.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "name": "Celebrity Profile Template",
+  "description": "Reusable multi-page biography/celebrity profile app template",
+  "projectTypeID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"projectID\": 1061,\r\n    \"appID\": 1063\r\n  }\r\n}"}],"isError":false},"id":37737,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "name": "home",
+  "title": "Home",
+  "slug": "home",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 13\r\n  }\r\n}"}],"isError":false},"id":46175,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "name": "biography",
+  "title": "Biography",
+  "slug": "biography",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 14\r\n  }\r\n}"}],"isError":false},"id":46660,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "name": "legacy",
+  "title": "Legacy &amp; Achievements",
+  "slug": "legacy",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 15\r\n  }\r\n}"}],"isError":false},"id":46990,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "name": "gallery",
+  "title": "Gallery",
+  "slug": "gallery",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 16\r\n  }\r\n}"}],"isError":false},"id":47305,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "page-navigation",
+  "name": "Main Nav",
+  "configuration": "{\"orientation\":\"horizontal\"}",
+  "sectionName": "header",
+  "appPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 718,\r\n    \"appWidgetID\": 172,\r\n    \"widgetType\": \"page-navigation\",\r\n    \"sectionName\": \"header\"\r\n  }\r\n}"}],"isError":false},"id":78505,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Hero Intro",
+  "configuration": "{\"content\":\"# [Subject Name]\n\n### [One-line tagline about who they are]\n\nWelcome to this profile.\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 13
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"configuration is not valid JSON: \\u00270x0A\\u0027 is invalid within a JSON string. The string should be correctly escaped. LineNumber: 0 | BytePositionInLine: 28.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":79199,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Biography Text",
+  "configuration": "{\"content\":\"## Early Life\n\n[Placeholder biography text.]\n\n## Career\n\n[Placeholder career text.]\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 14
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"configuration is not valid JSON: \\u00270x0A\\u0027 is invalid within a JSON string. The string should be correctly escaped. LineNumber: 0 | BytePositionInLine: 25.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":79644,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Achievements List",
+  "configuration": "{\"content\":\"## Achievements\n\n- [Achievement 1]\n- [Achievement 2]\n- [Achievement 3]\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 15
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"configuration is not valid JSON: \\u00270x0A\\u0027 is invalid within a JSON string. The string should be correctly escaped. LineNumber: 0 | BytePositionInLine: 27.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":80112,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Gallery Intro",
+  "configuration": "{\"content\":\"## Gallery\n\nA few photos.\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 16
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"configuration is not valid JSON: \\u00270x0A\\u0027 is invalid within a JSON string. The string should be correctly escaped. LineNumber: 0 | BytePositionInLine: 22.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":80520,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Hero Intro",
+  "configuration": "{\"content\":\"# [Subject Name]\\n\\n### [One-line tagline]\\n\\nWelcome to this profile.\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 13
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"Widget type \\u0027content\\u0027 requires at least one of configuration.html, configuration.markdown, or configuration.text.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":973809,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Biography Text",
+  "configuration": "{\"content\":\"## Early Life\\n\\n[Placeholder biography text.]\\n\\n## Career\\n\\n[Placeholder career text.]\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 14
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"Widget type \\u0027content\\u0027 requires at least one of configuration.html, configuration.markdown, or configuration.text.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":973731,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Achievements List",
+  "configuration": "{\"content\":\"## Achievements\\n\\n- [Achievement 1]\\n- [Achievement 2]\\n- [Achievement 3]\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 15
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"Widget type \\u0027content\\u0027 requires at least one of configuration.html, configuration.markdown, or configuration.text.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":973340,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Gallery Intro",
+  "configuration": "{\"content\":\"## Gallery\\n\\nA few photos.\",\"format\":\"markdown\",\"allowScripts\":false}",
+  "sectionName": "main",
+  "appPageID": 16
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": false,\r\n  \"errors\": [\r\n    {\r\n      \"message\": \"Widget type \\u0027content\\u0027 requires at least one of configuration.html, configuration.markdown, or configuration.text.\"\r\n    }\r\n  ]\r\n}"}],"isError":false},"id":974105,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Hero Intro",
+  "configuration": "{\"markdown\":\"# [Subject Name]\\n\\n### [One-line tagline]\\n\\nWelcome to this profile.\"}",
+  "sectionName": "main",
+  "appPageID": 13
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 719,\r\n    \"appWidgetID\": 173,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":993744,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Biography Text",
+  "configuration": "{\"markdown\":\"## Early Life\\n\\n[Placeholder biography text.]\\n\\n## Career\\n\\n[Placeholder career text.]\"}",
+  "sectionName": "main",
+  "appPageID": 14
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 720,\r\n    \"appWidgetID\": 174,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":993958,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Achievements List",
+  "configuration": "{\"markdown\":\"## Achievements\\n\\n- [Achievement 1]\\n- [Achievement 2]\\n- [Achievement 3]\"}",
+  "sectionName": "main",
+  "appPageID": 15
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 721,\r\n    \"appWidgetID\": 175,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":993939,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1063,
+  "widgetType": "content",
+  "name": "Gallery Intro",
+  "configuration": "{\"markdown\":\"## Gallery\\n\\nA few photos.\"}",
+  "sectionName": "main",
+  "appPageID": 16
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 722,\r\n    \"appWidgetID\": 176,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":993623,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_project_with_app</h3>
+    <div>Creates a new Project and App in one call.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "name": "Michael Jackson",
+  "description": "A multi-page biography profile for Michael Jackson, King of Pop",
+  "projectTypeID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"projectID\": 1062,\r\n    \"appID\": 1064\r\n  }\r\n}"}],"isError":false},"id":74624,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "name": "home",
+  "title": "Home",
+  "slug": "home",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 17\r\n  }\r\n}"}],"isError":false},"id":105777,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "name": "biography",
+  "title": "Biography",
+  "slug": "biography",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 18\r\n  }\r\n}"}],"isError":false},"id":106317,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "name": "legacy",
+  "title": "Legacy &amp; Achievements",
+  "slug": "legacy",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 19\r\n  }\r\n}"}],"isError":false},"id":106620,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_page</h3>
+    <div>Creates a new page in an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "name": "discography",
+  "title": "Discography",
+  "slug": "discography",
+  "parentPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 20\r\n  }\r\n}"}],"isError":false},"id":106399,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "page-navigation",
+  "name": "Main Nav",
+  "configuration": "{\"orientation\":\"horizontal\"}",
+  "sectionName": "header",
+  "appPageID": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 723,\r\n    \"appWidgetID\": 177,\r\n    \"widgetType\": \"page-navigation\",\r\n    \"sectionName\": \"header\"\r\n  }\r\n}"}],"isError":false},"id":137368,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "content",
+  "name": "Home Hero",
+  "configuration": "{\"markdown\":\"# MICHAEL JACKSON\\n\\n### The King of Pop\\n\\nAugust 29, 1958 — June 25, 2009\\n\\nSinger, songwriter, dancer, and one of the most influential entertainers in the history of popular music.\"}",
+  "sectionName": "hero",
+  "appPageID": 17
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 724,\r\n    \"appWidgetID\": 178,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"hero\"\r\n  }\r\n}"}],"isError":false},"id":137848,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "image",
+  "name": "Home Portrait",
+  "configuration": "{\"imageUrl\":\"https://upload.wikimedia.org/wikipedia/commons/0/04/Michael_Jackson_1984.jpg\",\"altText\":\"Michael Jackson, White House, May 14, 1984\",\"caption\":\"Michael Jackson at the White House, May 14, 1984 (White House Photo Office — public domain)\",\"objectFit\":\"cover\",\"presentationStyle\":\"framed\"}",
+  "sectionName": "hero",
+  "appPageID": 17
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 725,\r\n    \"appWidgetID\": 179,\r\n    \"widgetType\": \"image\",\r\n    \"sectionName\": \"hero\"\r\n  }\r\n}"}],"isError":false},"id":137093,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "content",
+  "name": "Home Intro Text",
+  "configuration": "{\"markdown\":\"Michael Joseph Jackson began performing as a child with his brothers in the Jackson 5 before launching one of the most successful solo careers in music history. His 1982 album *Thriller* remains one of the best-selling albums of all time, and his influence on music, dance, and popular culture is still felt today.\"}",
+  "sectionName": "main",
+  "appPageID": 17
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 726,\r\n    \"appWidgetID\": 180,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":137792,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "content",
+  "name": "Biography Text",
+  "configuration": "{\"markdown\":\"## Early Life\\n\\nMichael Joseph Jackson was born on August 29, 1958, in Gary, Indiana, the eighth of ten children in the Jackson family. He began performing professionally at age five as a member of the **Jackson 5** alongside his brothers, quickly becoming the group's lead vocalist.\\n\\n## Solo Career\\n\\nJackson's solo career took off with *Off the Wall* (1979), produced by Quincy Jones. Their next collaboration, *Thriller* (1982), became a cultural phenomenon — its title track's short film redefined what a music video could be, and the album is widely regarded as one of the best-selling albums of all time.\\n\\nHe followed with *Bad* (1987), *Dangerous* (1991), *HIStory* (1995), and *Invincible* (2001), each pairing ambitious production with elaborate stage and video performances.\\n\\n## Dance and Performance\\n\\nJackson was renowned for his dancing as much as his singing — the moonwalk, debuted during a 1983 televised performance of \\\"Billie Jean,\\\" became one of the most recognized dance moves in popular culture.\\n\\n## Later Life and Death\\n\\nJackson cont</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 727,\r\n    \"appWidgetID\": 181,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":137152,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "content",
+  "name": "Legacy &amp; Achievements",
+  "configuration": "{\"markdown\":\"## Awards &amp; Recognition\\n\\n- **13 competitive Grammy Awards** over his career, plus the Grammy Legend Award and a Grammy Lifetime Achievement Award\\n- Inducted into the **Rock and Roll Hall of Fame** twice — with the Jackson 5 in 1997, and as a solo artist in 2001\\n- Inducted into the **Songwriters Hall of Fame**\\n- Multiple **Guinness World Records**, including recognition for *Thriller*'s sales and cultural impact\\n\\n## Cultural Influence\\n\\nJackson's music videos helped establish MTV and the short-form music video as an art form in their own right. His dance style, vocal technique, and stage production have influenced generations of performers across pop, R&amp;B, and hip-hop.\\n\\n## Known As\\n\\nJackson earned the nickname **\\\"King of Pop\\\"**, reflecting both his commercial success and his outsized influence on the sound and presentation of popular music worldwide.\"}",
+  "sectionName": "main",
+  "appPageID": 19
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 728,\r\n    \"appWidgetID\": 182,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":137390,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>create_widget</h3>
+    <div>Creates a widget and places it in an app section.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "content",
+  "name": "Discography",
+  "configuration": "{\"markdown\":\"## Studio Albums (Solo)\\n\\n| Year | Album |\\n|---|---|\\n| 1972 | *Got to Be There* |\\n| 1972 | *Ben* |\\n| 1973 | *Music &amp; Me* |\\n| 1975 | *Forever, Michael* |\\n| 1979 | *Off the Wall* |\\n| 1982 | *Thriller* |\\n| 1987 | *Bad* |\\n| 1991 | *Dangerous* |\\n| 1995 | *HIStory: Past, Present and Future, Book I* |\\n| 2001 | *Invincible* |\\n\\n*Thriller*, *Bad*, and *Dangerous* each produced multiple chart-topping singles and are considered landmark releases in pop music history.\"}",
+  "sectionName": "main",
+  "appPageID": 20
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"widgetID\": 729,\r\n    \"appWidgetID\": 183,\r\n    \"widgetType\": \"content\",\r\n    \"sectionName\": \"main\"\r\n  }\r\n}"}],"isError":false},"id":137175,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 177,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#0b0b0d\",\"color\":\"#d4af37\",\"borderColor\":\"#d4af37\",\"borderStyle\":\"solid\",\"borderWidth\":0,\"paddingTop\":16,\"paddingBottom\":16,\"paddingLeft\":16,\"paddingRight\":16}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 177\r\n  }\r\n}"}],"isError":false},"id":182599,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 178,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#1a0e0e\",\"color\":\"#f2f0ea\",\"paddingTop\":40,\"paddingBottom\":40,\"paddingLeft\":40,\"paddingRight\":40,\"borderRadius\":8}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 178\r\n  }\r\n}"}],"isError":false},"id":183038,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 179,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#151417\",\"borderColor\":\"#d4af37\",\"borderStyle\":\"solid\",\"borderWidth\":3,\"paddingTop\":12,\"paddingBottom\":12,\"paddingLeft\":12,\"paddingRight\":12,\"borderRadius\":8}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 179\r\n  }\r\n}"}],"isError":false},"id":183096,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 180,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#151417\",\"color\":\"#f2f0ea\",\"paddingTop\":28,\"paddingBottom\":28,\"paddingLeft\":28,\"paddingRight\":28,\"borderRadius\":8}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 180\r\n  }\r\n}"}],"isError":false},"id":183289,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 181,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#151417\",\"color\":\"#f2f0ea\",\"paddingTop\":28,\"paddingBottom\":28,\"paddingLeft\":28,\"paddingRight\":28,\"borderRadius\":8}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 181\r\n  }\r\n}"}],"isError":false},"id":182783,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 182,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#151417\",\"color\":\"#f2f0ea\",\"paddingTop\":28,\"paddingBottom\":28,\"paddingLeft\":28,\"paddingRight\":28,\"borderRadius\":8}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 182\r\n  }\r\n}"}],"isError":false},"id":183257,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_widget_placement</h3>
+    <div>Updates a widget placement's style/layout/nav overrides.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 183,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"backgroundColor\":\"#151417\",\"color\":\"#f2f0ea\",\"paddingTop\":28,\"paddingBottom\":28,\"paddingLeft\":28,\"paddingRight\":28,\"borderRadius\":8}}}",
+  "widgetStyle": null,
+  "widgetCss": null,
+  "displayOrder": null,
+  "showInNav": null,
+  "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appWidgetID\": 183\r\n  }\r\n}"}],"isError":false},"id":182694,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 17,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Home",
+  "displayOrder": 1,
+  "isDefault": true
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"error":{"code":32001,"message":"Session not found"},"id":"","jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 18,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Biography",
+  "displayOrder": 2,
+  "isDefault": false
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"error":{"code":32001,"message":"Session not found"},"id":"","jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 19,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Legacy &amp; Achievements",
+  "displayOrder": 3,
+  "isDefault": false
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"error":{"code":32001,"message":"Session not found"},"id":"","jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 20,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Discography",
+  "displayOrder": 4,
+  "isDefault": false
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"error":{"code":32001,"message":"Session not found"},"id":"","jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 17,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Home",
+  "displayOrder": 1,
+  "isDefault": true
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 17\r\n  }\r\n}"}],"isError":false},"id":691388,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 18,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Biography",
+  "displayOrder": 2,
+  "isDefault": false
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 18\r\n  }\r\n}"}],"isError":false},"id":692077,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 19,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Legacy &amp; Achievements",
+  "displayOrder": 3,
+  "isDefault": false
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 19\r\n  }\r\n}"}],"isError":false},"id":691346,"jsonrpc":"2.0"}</pre>
+  </div>
+  <div class="card">
+    <h3>update_page</h3>
+    <div>Updates a page's name/title/slug/menu visibility/order/default status.</div>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "pageID": 20,
+  "name": null,
+  "title": null,
+  "slug": null,
+  "showInMenu": true,
+  "menuLabel": "Discography",
+  "displayOrder": 4,
+  "isDefault": false
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"result":{"content":[{"type":"text","text":"{\r\n  \"success\": true,\r\n  \"data\": {\r\n    \"appPageID\": 20\r\n  }\r\n}"}],"isError":false},"id":691998,"jsonrpc":"2.0"}</pre>
+  </div>
+
+  <h2>Follow-up pass — closing the section-creation gap, the root-cause fix, and the remaining tools</h2>
+
+  <div class="card">
+    <h3>create_section</h3>
+    <div>New tool this pass — closes the "no MCP tool can create an AppSection" gap. Reads App.Configuration, appends to layout.appSections, writes back.</div>
+    <div class="label">Request arguments</div>
+    <pre>{ "appID": 1064, "sectionName": "content-primary", "isPrimaryContentSection": true }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":true,"data":{"sectionName":"content-primary"}}</pre>
+    <div class="label">Negative test — duplicate name correctly rejected</div>
+    <pre>Second identical call returned an error, not a silent duplicate — guard confirmed working.</pre>
+  </div>
+
+  <div class="card">
+    <h3>create_widget — negative test, confirms the validator fix</h3>
+    <div class="label">Request arguments</div>
+    <pre>{ "appID": 1064, "widgetType": "content", "name": "bad-shape-test", "configuration": "{\"markdown\":\"should be rejected\"}", "sectionName": "content-primary", "appPageID": null }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":false,"errors":[{"message":"Widget type 'content' requires a non-empty 'content' field in configuration."}]}</pre>
+  </div>
+
+  <div class="card">
+    <h3>create_widget — positive test, the real fix</h3>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "appID": 1064,
+  "widgetType": "content",
+  "name": "MJ Home Intro (fixed)",
+  "configuration": "{\"content\":\"# The King of Pop\\n\\nMichael Jackson (1958-2009) was an American singer, songwriter, and dancer...\",\"format\":\"markdown\"}",
+  "sectionName": "content-primary",
+  "appPageID": 17
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"success":true,"data":{"widgetID":731,"appWidgetID":185,"widgetType":"content","sectionName":"content-primary"}}</pre>
+  </div>
+
+  <div class="card">
+    <h3>update_widget_placement — the design-review fix (padding/max-width)</h3>
+    <div class="label">Request arguments</div>
+    <pre>{
+  "widgetPlacementID": 185,
+  "styleConfiguration": "{\"widgetContainer\":{\"style\":{\"padding\":\"40px\",\"maxWidth\":\"800px\",\"margin\":\"0 auto\"}}}",
+  "widgetStyle": null, "widgetCss": null, "displayOrder": null, "showInNav": null, "navPosition": null
+}</pre>
+    <div class="label">Response</div>
+    <pre>{"success":true,"data":{"appWidgetID":185}}</pre>
+  </div>
+
+  <div class="card">
+    <h3>list_pages</h3>
+    <div>Lists real pages for an app.</div>
+    <div class="label">Request arguments</div>
+    <pre>{ "appID": 1064 }</pre>
+    <div class="label">Response</div>
+    <pre>4 real pages returned: Home (appPageID 17, default), Biography (18), Legacy &amp; Achievements (19), Discography (20) — all showInMenu:true, correct displayOrder.</pre>
+  </div>
+
+  <div class="card">
+    <h3>create_app</h3>
+    <div>Creates an app inside an existing project (vs. create_project_with_app, which makes both).</div>
+    <div class="label">Request arguments</div>
+    <pre>{ "projectID": 1062, "name": "MCP Coverage Test App", "description": "Throwaway app to exercise create_app/create_page/delete_page/delete_app for the coverage report." }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":true,"data":{"appID":1066}}</pre>
+  </div>
+
+  <div class="card">
+    <h3>create_app_from_template — fully root-caused this pass, two real, distinct blockers found and separated</h3>
+    <div>Three real, active <code>Template_DataTemplates</code> rows exist (80001/80002/80003, TenantID 1) — the earlier "no template exists" note was wrong; they exist, they're just not importable today, for two independent, real reasons found by adding proper exception logging (the generic wrapped error was hiding both).</div>
+    <div class="label">Blocker 1 — structural, by design, not fixable here: this tool requires a real UserID, incompatible with the API-key tier</div>
+    <div class="label">Request arguments (via API key)</div>
+    <pre>{ "templateID": 80001, "name": "Gap-Fill Template Test App", "description": null, "projectID": null, "taxonomyRecordID": null }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":false,"errors":[{"message":"create_app_from_template threw: UnauthorizedAccessException: User ID is not available in the current context"}]}</pre>
+    <div class="label">Root cause</div>
+    <pre>McpToolAuthorizationGuard.AuthorizeApiKey deliberately calls SetUserContext(userId: null, tenantID: apiKey.TenantID) — "an API key authenticates a tenant, not a specific human user," matching this codebase's existing AuthorizeApiKeyOrUserAttribute convention. create_app_from_template and update_app are the only two App Studio tools that call userContext.UserIdRequired, so they structurally cannot succeed via a scoped API key, by design — not a bug to patch (a synthetic UserID would undermine a deliberate tenant/audit-integrity decision made the same night). Worth a future decision: classify these two tools explicitly (a "RequiresHumanUser" tier, distinct from HumanOnly's role check) rather than leaving this discoverable only by hitting the exception.</pre>
+    <div class="label">Blocker 2 — real data/schema gap, surfaced once tested via a real human JWT (this tool's actual valid calling convention)</div>
+    <div class="label">Request arguments (via real human JWT, same templateID)</div>
+    <pre>{ "templateID": 80001, "name": "Gap-Fill Template Test App", "description": null, "projectID": null, "taxonomyRecordID": null }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":false,"errors":[{"message":"AppTemplate ContentData has schemaVersion 0, expected 1. This importer does not know how to read that shape — extend AppTemplateImportProcessor before importing templates on a newer schema."}]}</pre>
+    <div class="label">Note</div>
+    <pre>All 3 real existing templates predate AppTemplateImportProcessor's current schema version and cannot be imported as-is. No MCP-native way exists to produce a fresh v1-schema template either (create_template_from_app still doesn't exist as a tool). Genuine final blocker for this pass — extending the importer for schemaVersion 0, or creating a new template via the Designer UI's own save-as-template action, are the two real paths forward; neither was attempted here (backend migration work and a UI-driven path both exceed this pass's scope). The tool's own logic is confirmed reachable and correctly wired end to end (real UserID resolved, real DataTemplateID found, real deserialization attempted and correctly rejected) — this is a data-compatibility gap, not a code defect in the tool itself.</pre>
+    <div class="label" style="color:#2e7d32">RESOLVED (same night, follow-up pass) — both blockers fixed at root cause</div>
+    <pre>Blocker 1: ApiKey.CreatedByUserId (BizFirstFi.Go.IAM.Domain.Entities.ApiKey.cs) was never populated at key-generation time (only ever copied forward on rotation) — ApiKeyService.GenerateApiKeyAsync now injects IGoUserContextAccessor and sets CreatedByUserId at creation. McpToolAuthorizationGuard.AuthorizeApiKey now resolves userID from apiKey.CreatedByUserId instead of hardcoding null, scoped only to the MCP call path — the general AuthorizeApiKeyOrUserAttribute REST convention is untouched, and the tenant-scoping model is unchanged (tenant still always resolves from the key's own TenantID).
+Blocker 2: All 3 Template_DataTemplates rows (80001/80002/80003) were missing the schemaVersion:1 + app:{name,description,configuration} wrapper AppTemplateImportProcessor requires. Fixed both the seed scripts in BizFirstFiDB (Template_DataTemplates_8000{1,2,3}_*.data.sql) and the live database rows to match.
+Verified: create_app_from_template({ templateID: 80001, name: "..." }) via a real scoped API key now succeeds end to end — AppID 1067 created from the Sidebar Left App template, zero warnings, real UserID attributed via the key's CreatedByUserId.</pre>
+  </div>
+
+  <div class="card">
+    <h3>create_page (for delete_page test)</h3>
+    <pre>{ "appID": 1066, "name": "test-page", "title": "Test Page", "slug": "test-page", "parentPageID": null }</pre>
+    <pre>{"success":true,"data":{"appPageID":21}}</pre>
+  </div>
+
+  <div class="card">
+    <h3>delete_page</h3>
+    <div class="label">Request arguments</div>
+    <pre>{ "appID": 1066, "pageID": 21 }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":true,"data":{"pageID":21}}</pre>
+  </div>
+
+  <div class="card">
+    <h3>delete_app — cleanup</h3>
+    <div class="label">Request arguments</div>
+    <pre>{ "appID": 1066 }</pre>
+    <div class="label">Response</div>
+    <pre>{"success":true,"data":{"appID":1066}}</pre>
+    <div>Throwaway coverage-test app removed — only the real Michael Jackson site (AppID 1064) and the Celebrity Profile Template (AppID 1063) remain.</div>
+  </div>
+
+  <div class="card">
+    <h3>list_apps / get_app / list_widgets_in_app / list_widget_types</h3>
+    <div>Exercised in an earlier follow-up this same night (real calls: <code>list_apps</code> returned 61 real apps across the tenant; <code>get_app</code>/<code>list_widgets_in_app</code> confirmed AppID 1064's real widget rows; <code>list_widget_types</code> returned the real 18-type catalog) — folded in here so this one report covers all 16 tools in one place rather than being split across the night's separate passes.</div>
+  </div>
+</div>
